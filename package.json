@@ -1,0 +1,17 @@
+{
+  "name": "c5t-snippet",
+  "version": "0.0.0",
+  "description": "",
+  "scripts": {
+    "build-dev": "rm -r ./build && mkdir -p ./build; ./node_modules/.bin/uglifyjs ./src/c5t.js -o ./build/c5t.js -b",
+    "build": "rm -r ./build && mkdir -p ./build; ./node_modules/.bin/uglifyjs ./src/c5t.js -o ./build/c5t.js -m",
+    "start-dev": "npm run build-dev && node ./test/server.js",
+    "start": "npm run build && node ./test/server.js"
+  },
+  "author": "",
+  "license": "",
+  "devDependencies": {
+    "express": "^4.13.1",
+    "uglify-js": "^2.4.24"
+  }
+}
