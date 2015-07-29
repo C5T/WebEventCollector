@@ -1,4 +1,6 @@
 (function (window) {
+  var document = window.document;
+  
   var str_call = "call";
   var str_apply = "apply";
   var str_indexOf = "indexOf";
@@ -11,6 +13,7 @@
   var str_trackingId = "trackingId";
   var str_cookieDomain = "cookieDomain";
   var str_name = "name";
+  var str_addEventListener = "addEventListener";
   
   var _defaultTrackerName = "";
   var _trackerDataPropertyName = "d";
@@ -36,7 +39,9 @@
   
   function _DEBUG_log() {
     try {
-      console && console.log && console.log.apply(console, arguments);
+      var args = _toArray[str_call](arguments);
+      args.unshift('[' + (1*new Date()) + ']');
+      console && console.log && console.log.apply(console, args);
     }
     catch (ex) {}
   }
@@ -179,5 +184,40 @@
   // Execute the queued calls.
   while (c5t_queue.length > 0) {
     _call(c5t_queue[str_shift]());
+  }
+  
+  // Start auto-tracking via Page Visibility API.
+  var visibilityHiddenProperty = (
+    'hidden' in document ? 'hidden' :
+    'webkitHidden' in document ? 'webkitHidden' :
+    'mozHidden' in document ? 'mozHidden' :
+    null
+  );
+  var visibilityStateProperty = (
+    'visibilityState' in document ? 'visibilityState' :
+    'webkitVisibilityState' in document ? 'webkitVisibilityState' :
+    'mozVisibilityState' in document ? 'mozVisibilityState' :
+    null
+  );
+  var visibilityChangeEvent = (
+    visibilityHiddenProperty &&
+    visibilityHiddenProperty.replace(/hidden/i, 'visibilitychange')
+  );
+  var visibilityIsHidden;
+  
+  function _onVisibilityChange() {
+    var v = !!document[visibilityHiddenProperty];
+    if (v !== visibilityIsHidden) {
+      visibilityIsHidden = v;
+      c5t('send', 'event', {
+        'eventCategory': 'c5t.io',
+        'eventAction': (visibilityIsHidden ? 'Background' : 'Foreground')
+      });
+    }
+  }
+  
+  if (visibilityChangeEvent) {
+    document[str_addEventListener] && document[str_addEventListener](visibilityChangeEvent, _onVisibilityChange);
+    _onVisibilityChange();
   }
 }(window));
