@@ -23,7 +23,8 @@ app.get('/c5t.js', function (req, res) {
   res.format({
     'text/javascript': function () {
       res.set('Content-Type', 'text/javascript');
-      res.end(fs_.readFileSync(path_.join(path_.resolve(__dirname, '..', 'build'), 'c5t.js')));
+      res.end(fs_.readFileSync(path_.join(path_.resolve(__dirname, '..', 
+        (process.env.NODE_ENV === 'development' ? 'src' : 'build')), 'c5t.js')));
     },
     
     'default': function () {
