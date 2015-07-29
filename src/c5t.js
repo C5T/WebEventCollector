@@ -1,6 +1,4 @@
-(function (window) {
-  var document = window.document;
-  
+(function (window, document) {
   var str_call = "call";
   var str_apply = "apply";
   var str_indexOf = "indexOf";
@@ -220,4 +218,4 @@
     document[str_addEventListener] && document[str_addEventListener](visibilityChangeEvent, _onVisibilityChange);
     _onVisibilityChange();
   }
-}(window));
+}(window, document));
