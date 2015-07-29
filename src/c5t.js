@@ -1,4 +1,6 @@
 (function (window, document, navigator) {
+  'use strict';
+  
   var str_call = "call";
   var str_apply = "apply";
   var str_indexOf = "indexOf";
@@ -247,7 +249,7 @@
     }
     _extend(data, args[0], _isPrimitiveType);
     var trackerName = (data[str_name] || _defaultTrackerName);
-    tracker = (_trackersByName[trackerName] || new Tracker());
+    var tracker = (_trackersByName[trackerName] || new Tracker());
     tracker.set(data);
     if (!_trackersByName[trackerName]) {
       _trackersByName[trackerName] = tracker;
@@ -368,10 +370,14 @@
   }
   
   function _onWindowUnload() {
-    tracker.send('event', {
-      'eventCategory': 'c5t.io',
-      'eventAction': 'Exit',
-      'transport': 'beacon'
+    _forEachTracker(function (tracker) {
+      if (tracker.get(str_trackEnterExit)) {
+        tracker.send('event', {
+          'eventCategory': 'c5t.io',
+          'eventAction': 'Exit',
+          'transport': 'beacon'
+        });
+      }
     });
   }
   
