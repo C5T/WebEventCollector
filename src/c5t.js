@@ -12,9 +12,17 @@
   var str_cookieDomain = "cookieDomain";
   var str_name = "name";
   var str_addEventListener = "addEventListener";
+  var str_trackEnterExit = "trackEnterExit";
+  var str_trackForegroundBackground = "trackForegroundBackground";
   
   var _defaultTrackerName = "";
   var _trackerDataPropertyName = "d";
+  
+  var _snippetQueuePropertyName = "q";
+  var _snippetTimePropertyName = "l";
+  
+  // WARNING: Do not use "l" or "q" for this name.
+  var _loadedPropertyName = "loaded";
   
   var _hasOwnProperty = {}.hasOwnProperty;
   var _toArray = [].slice;
@@ -28,12 +36,18 @@
   
   // A collection of trackers by name.
   var _trackersByName = {};
+  var _trackersArray = [];
   
   // Get everything from the stub object that will be replaced.
   var c5t_name = (window.CurrentIntelligenceObject || "c5t");
   var c5t = ((_isString(c5t_name) && window[c5t_name]) || {});
-  var c5t_queue = (c5t.q || []);
-  var c5t_snippetTime = (c5t.l || 1*new Date());
+  var c5t_snippetQueue = (c5t[_snippetQueuePropertyName] || []);
+  var c5t_snippetTime = (c5t[_snippetTimePropertyName] || 1*new Date());
+  
+  // Do not load and initialize the library twice.
+  if (c5t && c5t[_loadedPropertyName]) {
+    return;
+  }
   
   function _DEBUG_log() {
     try {
@@ -85,13 +99,9 @@
   
   /**
    * The tracker constructor.
-   *
-   * @param {Object} [data] The tracker initial data.
    */
-  function Tracker(data) {
-    this[_trackerDataPropertyName] = _extendPrimitive({}, data);
-    
-    _DEBUG_log(c5t_name, str_create, this[_trackerDataPropertyName]);
+  function Tracker() {
+    this[_trackerDataPropertyName] = {};
   }
   
   var TrackerProto = Tracker[str_prototype];
@@ -147,7 +157,14 @@
       data[str_cookieDomain] = args[str_shift]();
     }
     _extendPrimitive(data, args[0]);
-    return (_trackersByName[data[str_name] || _defaultTrackerName] = new Tracker(data));
+    var trackerName = (data[str_name] || _defaultTrackerName);
+    tracker = (_trackersByName[trackerName] || new Tracker());
+    tracker.set(data);
+    if (!_trackersByName[trackerName]) {
+      _trackersByName[trackerName] = tracker;
+      _trackersArray.push(tracker);
+    }
+    return tracker;
   }
   
   /**
@@ -171,18 +188,42 @@
     }
   }
   
+  /**
+   * Loops through all trackers.
+   *
+   * @param {function(tracker:Tracker,index:number,trackers:Array.<Tracker>)} callback
+   */
+  function _forEachTracker(callback) {
+    for (var ic = _trackersArray.length, i = 0; i < ic; ++i) {
+      callback(_trackersArray[i], i, _trackersArray);
+    }
+  }
+  
   // Replace with the function that makes immediate calls.
   c5t = window[c5t_name] = function () {
     return _call(arguments);
   };
   
+  c5t[_loadedPropertyName] = true;
+  
   // Put the library methods on the `c5t` object itself.
   c5t[str_create] = _create;
   
   // Execute the queued calls.
-  while (c5t_queue.length > 0) {
-    _call(c5t_queue[str_shift]());
+  while (c5t_snippetQueue.length > 0) {
+    _call(c5t_snippetQueue[str_shift]());
   }
+  
+  // Send 'Enter' event once per library load.
+  // Send after draining the queue to give the user time to create at least one tracker.
+  _forEachTracker(function (tracker) {
+    if (tracker.get(str_trackEnterExit)) {
+      tracker.send('event', {
+        'eventCategory': 'c5t.io',
+        'eventAction': 'Enter'
+      });
+    }
+  });
   
   // Start auto-tracking via Page Visibility API.
   var visibilityHiddenProperty = (
@@ -207,9 +248,15 @@
     var v = !!document[visibilityHiddenProperty];
     if (v !== visibilityIsHidden) {
       visibilityIsHidden = v;
-      c5t('send', 'event', {
-        'eventCategory': 'c5t.io',
-        'eventAction': (visibilityIsHidden ? 'Background' : 'Foreground')
+      
+      _forEachTracker(function (tracker) {
+        tracker.set('isForeground', !visibilityIsHidden);
+        if (tracker.get(str_trackForegroundBackground)) {
+          tracker.send('event', {
+            'eventCategory': 'c5t.io',
+            'eventAction': (visibilityIsHidden ? 'Background' : 'Foreground')
+          });
+        }
       });
     }
   }
