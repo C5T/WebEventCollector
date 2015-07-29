@@ -214,17 +214,6 @@
     _call(c5t_snippetQueue[str_shift]());
   }
   
-  // Send 'Enter' event once per library load.
-  // Send after draining the queue to give the user time to create at least one tracker.
-  _forEachTracker(function (tracker) {
-    if (tracker.get(str_trackEnterExit)) {
-      tracker.send('event', {
-        'eventCategory': 'c5t.io',
-        'eventAction': 'Enter'
-      });
-    }
-  });
-  
   // Start auto-tracking via Page Visibility API.
   var visibilityHiddenProperty = (
     'hidden' in document ? 'hidden' :
@@ -244,7 +233,7 @@
   );
   var visibilityIsHidden;
   
-  function _onVisibilityChange() {
+  function _onVisibilityChanged() {
     var v = !!document[visibilityHiddenProperty];
     if (v !== visibilityIsHidden) {
       visibilityIsHidden = v;
@@ -261,8 +250,31 @@
     }
   }
   
+  function _onEnter() {
+    // Send 'Enter' event once per library load.
+    // Send after draining the queue to give the user time to create at least one tracker.
+    _forEachTracker(function (tracker) {
+      if (tracker.get(str_trackEnterExit)) {
+        tracker.send('event', {
+          'eventCategory': 'c5t.io',
+          'eventAction': 'Enter'
+        });
+      }
+    });
+  }
+  
   if (visibilityChangeEvent) {
-    document[str_addEventListener] && document[str_addEventListener](visibilityChangeEvent, _onVisibilityChange);
-    _onVisibilityChange();
+    _forEachTracker(function (tracker) {
+      tracker.set('isForeground', !document[visibilityHiddenProperty]);
+    });
+    document[str_addEventListener] && document[str_addEventListener](visibilityChangeEvent, _onVisibilityChanged);
+    _onEnter();
+    _onVisibilityChanged();
+  }
+  else {
+    _forEachTracker(function (tracker) {
+      tracker.set('trackForegroundBackgroundUnsupported', true);
+    });
+    _onEnter();
   }
 }(window, document));
