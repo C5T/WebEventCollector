@@ -1,4 +1,4 @@
-(function (window, document) {
+(function (window, document, navigator) {
   var str_call = "call";
   var str_apply = "apply";
   var str_indexOf = "indexOf";
@@ -14,9 +14,16 @@
   var str_addEventListener = "addEventListener";
   var str_trackEnterExit = "trackEnterExit";
   var str_trackForegroundBackground = "trackForegroundBackground";
+  var str_xhr = "xhr";
+  var str_image = "image";
+  var str_beacon = "beacon";
+  var str_transport = "transport";
+  var str_hitCallback = "hitCallback";
+  var str_useBeacon = "useBeacon";
+  var str_hitType = "hitType";
   
   var _defaultTrackerName = "";
-  var _trackerDataPropertyName = "d";
+  var _trackerStatePropertyName = "s";
   
   var _snippetQueuePropertyName = "q";
   var _snippetTimePropertyName = "l";
@@ -84,12 +91,13 @@
    *
    * @param {Object} dst The destination object.
    * @param {Object} [src] The source object.
-   * @returns {Object} The destinatin object.
+   * @param {Function} [predicate] The predicate to check if the property should be copied.
+   * @returns {Object} The destination object.
    */
-  function _extendPrimitive(dst, src) {
+  function _extend(dst, src, predicate) {
     if (src) {
       for (var x in src) {
-        if (_hasOwnProperty[str_call](src, x) && _isPrimitiveType(src[x])) {
+        if (_hasOwnProperty[str_call](src, x) && (predicate ? predicate(src[x], x) : true)) {
           dst[x] = src[x];
         }
       }
@@ -97,11 +105,78 @@
     return dst;
   }
   
+  var _transports = {};
+  
+  _transports[str_xhr] = function (baseUrl, payloadString, callbackFn) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState === 4) {
+        xhr.onreadystatechange = null;
+        xhr = null;
+        callbackFn();
+      }
+    };
+    // Use synchronous request.
+    xhr.open('POST', baseUrl, false);
+    xhr.send(payloadString);
+  };
+  
+  _transports[str_image] = function (baseUrl, payloadString, callbackFn) {
+    var image = new Image();
+    image.onload = image.onerror = function () {
+      image.onload = image.onerror = null;
+      image = null;
+      callbackFn();
+    };
+    image.src = baseUrl + '?' + payloadString;
+  };
+  
+  // If the `sendBeacon` API is not supported we don't add the transport implementation.
+  if (navigator.sendBeacon) {
+    _transports[str_beacon] = function (baseUrl, payloadString, callbackFn) {
+      navigator.sendBeacon(baseUrl, payloadString);
+      setTimeout(callbackFn, 0);
+    };
+  }
+  
+  /**
+   * Serializes the hit info into application/x-www-form-urlencoded format.
+   *
+   * @param {Object} trackerState The current state of the tracker.
+   * @param {string} hitType The hit type, e.g. 'event' or 'pageview'.
+   * @param {Object} [fieldObject] The overrides for this particular hit.
+   * @returns {string} The serialized hit info.
+   */
+  function _serializeHit(trackerState, hitType, fieldObject) {
+    var payload = _extend(_extend({}, trackerState), fieldObject);
+    payload[str_hitType] = hitType;
+    delete payload[str_trackingId];
+    delete payload[str_useBeacon];
+    delete payload[str_transport];
+    var payloadString = '';
+    for (var x in payload) {
+      if (_hasOwnProperty[str_call](payload, x) && _isPrimitiveType(payload[x])) {
+        payloadString += (
+          (payloadString ? '&' : '') +
+          encodeURIComponent(x) + '=' +
+          encodeURIComponent(payload[x])
+        );
+      }
+    }
+    return payloadString;
+  }
+  
+  function _determineTransport(baseUrl, payloadString) {
+    return _transports[(payloadString.length >= (2048 - baseUrl.length - 1) ? str_xhr : str_image)];
+  }
+  
+  function _noop() {}
+  
   /**
    * The tracker constructor.
    */
   function Tracker() {
-    this[_trackerDataPropertyName] = {};
+    this[_trackerStatePropertyName] = {};
   }
   
   var TrackerProto = Tracker[str_prototype];
@@ -111,7 +186,21 @@
    * @param {Object} [opt_fieldObject] The `fieldObject` overrides for this particular hit.
    */
   TrackerProto[str_send] = function (hitType, opt_fieldObject) {
-    _DEBUG_log(c5t_name, str_send, this[_trackerDataPropertyName], hitType, opt_fieldObject);
+    var options = opt_fieldObject || {};
+    var trackerState = this[_trackerStatePropertyName];
+    // TODO(sompylasar): Update the API endpoint URL when the backend is ready.
+    var baseUrl = '//localhost:4000/log/' + trackerState[str_trackingId];
+    var payloadString = _serializeHit(trackerState, hitType, opt_fieldObject);
+    var transportFn = (
+      _transports[options[str_transport] || (options[str_useBeacon] && str_beacon)]
+      || _determineTransport(baseUrl, payloadString)
+    );
+    var callbackFn = options[str_hitCallback];
+    if (!callbackFn || !callbackFn[str_apply]) {
+      callbackFn = _noop;
+    }
+    _DEBUG_log(c5t_name, str_send, payloadString);
+    transportFn(baseUrl, payloadString, callbackFn);
   };
   
   /**
@@ -122,12 +211,12 @@
    */
   TrackerProto[str_set] = function () {
     var args = _toArray[str_call](arguments);
-    var data = this[_trackerDataPropertyName];
+    var data = this[_trackerStatePropertyName];
     if (_isString(args[0])) {
       data[args[0]] = args[1];
     }
     else {
-      _extendPrimitive(data, args[0]);
+      _extend(data, args[0], _isPrimitiveType);
     }
   };
   
@@ -137,7 +226,7 @@
    * @param {string} fieldName The `fieldName`.
    */
   TrackerProto[str_get] = function (fieldName) {
-    return this[_trackerDataPropertyName][fieldName];
+    return this[_trackerStatePropertyName][fieldName];
   };
   
   /**
@@ -156,7 +245,7 @@
     if (_isString(args[0])) {
       data[str_cookieDomain] = args[str_shift]();
     }
-    _extendPrimitive(data, args[0]);
+    _extend(data, args[0], _isPrimitiveType);
     var trackerName = (data[str_name] || _defaultTrackerName);
     tracker = (_trackersByName[trackerName] || new Tracker());
     tracker.set(data);
@@ -277,4 +366,14 @@
     });
     _onEnter();
   }
-}(window, document));
+  
+  function _onWindowUnload() {
+    tracker.send('event', {
+      'eventCategory': 'c5t.io',
+      'eventAction': 'Exit',
+      'transport': 'beacon'
+    });
+  }
+  
+  window[str_addEventListener] && window[str_addEventListener]('unload', _onWindowUnload);
+}(window, document, navigator));
