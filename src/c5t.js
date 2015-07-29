@@ -101,7 +101,7 @@
    * @param {Object} [opt_fieldObject] The `fieldObject` overrides for this particular hit.
    */
   TrackerProto[str_send] = function (hitType, opt_fieldObject) {
-    _DEBUG_log(c5t_name, str_send, this[_trackerDataPropertyName], arguments);
+    _DEBUG_log(c5t_name, str_send, this[_trackerDataPropertyName], hitType, opt_fieldObject);
   };
   
   /**
