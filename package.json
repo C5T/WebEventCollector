@@ -1,0 +1,17 @@
+{
+  "name": "c5t-snippet",
+  "version": "0.0.0",
+  "description": "",
+  "scripts": {
+    "build": "rm -r ./build && mkdir -p ./build; ./node_modules/.bin/uglifyjs ./src/c5t.js -o ./build/c5t.js -m",
+    "start-dev": "NODE_ENV=development node ./test/server.js",
+    "start": "npm run build && NODE_ENV=production node ./test/server.js"
+  },
+  "author": "John Babak <babak.john@gmail.com>",
+  "license": "",
+  "devDependencies": {
+    "body-parser": "^1.13.2",
+    "express": "^4.13.1",
+    "uglify-js": "^2.4.24"
+  }
+}

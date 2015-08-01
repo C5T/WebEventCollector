@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+<title></title>
+<script>
+(function(c,ur,re,nt,_,i,o){c['CurrentIntelligenceObject']=_;c[_]=c[_]||function(){
+(c[_].q=c[_].q||[]).push(arguments)},c[_].l=1*new Date();i=ur.createElement(re),
+o=ur.getElementsByTagName(re)[0];i.async=1;i.src=nt;o.parentNode.insertBefore(i,o)
+})(window,document,'script','//localhost:3000/c5t.js','c5t');
+
+c5t('create', 'ACCOUNT_ID');
+c5t('set', 'trackEnterExit', true);
+c5t('set', 'trackForegroundBackground', true);
+
+setTimeout(function () {
+  c5t('send', 'event', {
+    'eventCategory': 'Test Category',
+    'eventAction': 'Test Action'
+  });
+}, 3000);
+</script>
+</head>
+<body>
+<p>See the DevTools console for details.</p>
+</body>
+</html>
