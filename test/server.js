@@ -49,7 +49,7 @@ loggingApp.use(require('body-parser').urlencoded({
   type: function () { return true; }
 }));
 
-loggingApp.all('/log/:trackingId', function (req, res) {
+loggingApp.all('/datadrop/v1/:trackingId', function (req, res) {
   console.log(
     '\n[' + (1*new Date()) + '] ' +
     req.method + ' ' + req.url + '\n' +
