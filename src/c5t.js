@@ -1,17 +1,31 @@
-(function (window, document, navigator) {
+(function (window) {
   'use strict';
   
+  var STR_document = "document";
+  var STR_navigator = "navigator";
+  var STR_cookie = "cookie";
   var STR_call = "call";
   var STR_apply = "apply";
   var STR_indexOf = "indexOf";
   var STR_prototype = "prototype";
   var STR_shift = "shift";
+  var STR_push = "push";
+  var STR_split = "split";
+  var STR_join = "join";
+  var STR_match = "match";
+  var STR_length = "length";
   var STR_create = "create";
+  var STR_version = "version";
   var STR_send = "send";
   var STR_set = "set";
   var STR_get = "get";
   var STR_trackingId = "trackingId";
+  var STR_clientId = "clientId";
+  var STR_userId = "userId";
+  var STR_cookieName = "cookieName";
   var STR_cookieDomain = "cookieDomain";
+  var STR_cookiePath = "cookiePath";
+  var STR_cookieExpires = "cookieExpires";
   var STR_name = "name";
   var STR_addEventListener = "addEventListener";
   var STR_trackEnterExit = "trackEnterExit";
@@ -31,6 +45,9 @@
   var STR_eventValue = "eventValue";
   var STR_isForeground = "isForeground";
   var STR_isForegroundUnsupported = "isForegroundUnsupported";
+  
+  var document = window[STR_document];
+  var navigator = window[STR_navigator];
   
   var C5T_EVENT_CATEGORY = 'C5T';
   var C5T_EVENT_ACTION_ENTER = 'En';
@@ -117,6 +134,10 @@
   SERIALIZABLE_PROPERTIES[STR_eventValue] = "ev";
   SERIALIZABLE_PROPERTIES[STR_isForeground] = "fg";
   SERIALIZABLE_PROPERTIES[STR_isForegroundUnsupported] = "fgu";
+  // The tracking ID is the part of the URL for now, so we don't put it into the payload.
+  //SERIALIZABLE_PROPERTIES[STR_trackingId] = "tid";
+  SERIALIZABLE_PROPERTIES[STR_clientId] = "cid";
+  SERIALIZABLE_PROPERTIES[STR_userId] = "uid";
   
   // Shorthands for utility functions.
   var _hasOwnProperty = {}.hasOwnProperty;
@@ -281,7 +302,7 @@
    * @returns {function(baseUrl:string,payloadString:string,callbackFn:Function)} The transport.
    */
   function _determineTransport(baseUrl, payloadString) {
-    return _transports[((baseUrl.length + 1 + payloadString.length) >= URL_MAX_LENGTH ? STR_xhr : STR_image)];
+    return _transports[((baseUrl[STR_length] + 1 + payloadString[STR_length]) >= URL_MAX_LENGTH ? STR_xhr : STR_image)];
   }
   
   /**
@@ -289,15 +310,142 @@
    */
   function _noop() {}
   
+  
+  function _readCookie(name) {
+    var c = decodeURIComponent(document[STR_cookie])[STR_split](";");
+    name = new RegExp("^\\s*" + name + "=\\s*(.*?)\\s*$");
+    for (var d = 0; d < c[STR_length]; d++) {
+      var match = c[d][STR_match](name);
+      if (match) {
+        return match[1];
+      }
+    }
+  }
+  
+  function _writeCookie(name, value, path, domain, expiresInMs) {
+    // TODO(sompylasar): GA limits the cookie value length with 1200 bytes.
+    var cookie = encodeURIComponent(name) + "=" + encodeURIComponent(value) + "; path=" + path + "; ";
+    if (typeof expiresInMs === "number") {
+      cookie += "expires=" + (new Date(1*new Date() + expiresInMs)).toGMTString() + "; ";
+    }
+    // TODO(sompylasar): Add "auto" domain.
+    if (domain === "auto") {
+      domain = void 0;
+    }
+    if (domain && "none" != domain) {
+      cookie += "domain=" + domain + ";";
+    }
+    document[STR_cookie] = cookie;
+    // TODO(sompylasar): GA checks if the cookie value has been actually written.
+  }
+  
+  /**
+   * Some hashing algorithm from GA analytics.js source.
+   */
+  function _calcHash(a) {
+    var b = 1, c = 0, d;
+    if (a) {
+      for (b = 0, d = a[STR_length] - 1; 0 <= d; d--) {
+        c = a.charCodeAt(d),
+        b = (b << 6 & 268435455) + c + (c << 14),
+        c = b & 266338304,
+        b = 0 != c ? b ^ c >> 21 : b;
+      }
+    }
+    return b;
+  }
+  
+  /**
+   * Some footprinting algorithm from GA analytics.js source.
+   */
+  function _calcFootprint() {
+    for (
+      var a =  +
+        (document[STR_cookie] ? document[STR_cookie] : "") +
+        (document.referrer ? document.referrer : ""),
+      b = a[STR_length],
+      c = window.history[STR_length];
+      0 < c;
+    ) {
+      a += c-- ^ b++;
+    }
+    return _calcHash(a);
+  }
+  
+  
+  var C5T_COOKIE_VERSION = '1';
+  
+  function _serializeCookie(tracker) {
+    var clientId = tracker[STR_get](STR_clientId);
+    if (!clientId) {
+      return;
+    }
+    
+    var cookieValue = [
+      'v' + '=' + encodeURIComponent(C5T_COOKIE_VERSION),
+      SERIALIZABLE_PROPERTIES[STR_clientId] + '=' + encodeURIComponent(clientId)
+    ][STR_join]('&');
+    
+    _writeCookie(
+      tracker[STR_get](STR_cookieName),
+      cookieValue,
+      tracker[STR_get](STR_cookiePath),
+      tracker[STR_get](STR_cookieDomain),
+      tracker[STR_get](STR_cookieExpires)
+    );
+  }
+  
+  function _deserializeCookie(tracker) {
+    var cookieValue = _readCookie(tracker[STR_get](STR_cookieName));
+    var pairs = (cookieValue && cookieValue[STR_split]('&')) || [];
+    var versionMatched = false;
+    var clientId;
+    for (var ic = pairs.length, i = 0; i < ic; ++i) {
+      var pair = pairs[i][STR_split]('=');
+      pair[1] = decodeURIComponent(pair[1]);
+      if (pair[0] === 'v' && C5T_COOKIE_VERSION === pair[1]) {
+        versionMatched = true;
+      }
+      if (pair[0] === SERIALIZABLE_PROPERTIES[STR_clientId]) {
+        clientId = pair[1];
+      }
+    }
+    if (versionMatched && clientId) {
+      tracker[STR_set](STR_clientId, clientId);
+    }
+    else {
+      tracker[STR_set](STR_clientId, _calcFootprint());
+    }
+  }
+  
+  function _removeCookie(tracker) {
+    _writeCookie(
+      tracker[STR_get](STR_cookieName),
+      "deleted",
+      tracker[STR_get](STR_cookiePath),
+      tracker[STR_get](STR_cookieDomain),
+      -1E10
+    );
+  }
+  
+  
   /**
    * The tracker constructor.
    */
   function Tracker() {
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME] = {};
     
+    // Fill in the defaults.
+    trackerState[STR_cookieName] = "_c5t";
+    trackerState[STR_cookiePath] = "/";
+    trackerState[STR_cookieExpires] = 63072E3;
+    
     // Make the tracking of c5t-specific events enabled by default.
     trackerState[STR_trackEnterExit] = true;
     trackerState[STR_trackForegroundBackground] = true;
+    
+    _deserializeCookie(this);
+    _serializeCookie(this);
   }
   
   var TrackerProto = Tracker[STR_prototype];
@@ -336,6 +484,7 @@
    * @param {string} [args_1] Either `fieldValue` for the `fieldName` or nothing.
    */
   TrackerProto[STR_set] = function (args_0, args_1) {
+    _removeCookie(this);
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME];
     if (_isString(args_0)) {
       trackerState[args_0] = args_1;
@@ -343,12 +492,14 @@
     else {
       _extend(trackerState, args_0);
     }
+    _serializeCookie(this);
   };
   
   /**
    * Gets a property on the tracker.
    *
    * @param {string} fieldName The `fieldName`.
+   * @returns {*} The value.
    */
   TrackerProto[STR_get] = function (fieldName) {
     return this[TRACKER_STATE_PROPERTY_NAME][fieldName];
@@ -376,10 +527,10 @@
     _extend(configObject, args_0);
     var trackerName = (configObject[STR_name] || DEFAULT_TRACKER_NAME);
     var tracker = (_trackersByName[trackerName] || new Tracker());
-    tracker.set(configObject);
+    tracker[STR_set](configObject);
     if (!_trackersByName[trackerName]) {
       _trackersByName[trackerName] = tracker;
-      _trackersArray.push(tracker);
+      _trackersArray[STR_push](tracker);
     }
     return tracker;
   }
@@ -411,7 +562,7 @@
    * @param {function(tracker:Tracker,index:number,trackers:Array.<Tracker>)} callback
    */
   function _forEachTracker(callback) {
-    for (var ic = _trackersArray.length, i = 0; i < ic; ++i) {
+    for (var ic = _trackersArray[STR_length], i = 0; i < ic; ++i) {
       callback(_trackersArray[i], i, _trackersArray);
     }
   }
@@ -428,7 +579,7 @@
   c5t[C5T_LOADED_FLAG_PROPERTY_NAME] = true;
   
   // Execute the queued calls.
-  while (c5t_snippetQueue.length > 0) {
+  while (c5t_snippetQueue[STR_length] > 0) {
     _call(c5t_snippetQueue[STR_shift]());
   }
   
@@ -519,4 +670,4 @@
   }
   
   window[STR_addEventListener] && window[STR_addEventListener]('unload', _onWindowUnload);
-}(window, document, navigator));
+}(window));
