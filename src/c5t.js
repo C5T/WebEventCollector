@@ -553,7 +553,7 @@
     _deserializeTracker(this);
     
     // Generate new Client ID if the first-initialized tracker cookie is missing (first-time visit).
-    trackerState[STR_clientId] = commonClientId = (commonClientId || _UUID());
+    trackerState[STR_clientId] = commonClientId = (commonClientId || trackerState[STR_clientId] || _UUID());
     _serializeTracker(this);
   }
   
