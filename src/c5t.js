@@ -3,6 +3,7 @@
   
   var STR_document = "document";
   var STR_navigator = "navigator";
+  var STR_location = "location";
   var STR_cookie = "cookie";
   var STR_call = "call";
   var STR_apply = "apply";
@@ -13,6 +14,7 @@
   var STR_split = "split";
   var STR_join = "join";
   var STR_match = "match";
+  var STR_substring = "substring";
   var STR_length = "length";
   var STR_create = "create";
   var STR_version = "version";
@@ -310,72 +312,129 @@
    */
   function _noop() {}
   
-  
+  /**
+   * Cookie getter from mixpanel.js
+   * Modified.
+   * https://github.com/mixpanel/mixpanel-js/blob/master/mixpanel.js#L910
+   */
   function _readCookie(name) {
-    var c = decodeURIComponent(document[STR_cookie])[STR_split](";");
-    name = new RegExp("^\\s*" + name + "=\\s*(.*?)\\s*$");
-    for (var d = 0; d < c[STR_length]; d++) {
-      var match = c[d][STR_match](name);
-      if (match) {
-        return match[1];
+    var nameEQ = name + "=";
+    var ca = document[STR_cookie][STR_split](';');
+    for(var i = 0, ic = ca[STR_length]; i < ic; i++) {
+      var c = ca[i];
+      while (c.charAt(0) == ' ') {
+        c = c[STR_substring](1,c[STR_length]);
+      }
+      if (c[STR_indexOf](nameEQ) == 0) {
+        return decodeURIComponent(c[STR_substring](nameEQ[STR_length],c[STR_length]));
       }
     }
+    return null;
   }
   
+  /**
+   * Cookie setter from mixpanel.js
+   * Modified.
+   * @see https://github.com/mixpanel/mixpanel-js/blob/master/mixpanel.js#L929
+   */
   function _writeCookie(name, value, path, domain, expiresInMs) {
-    // TODO(sompylasar): GA limits the cookie value length with 1200 bytes.
-    var cookie = encodeURIComponent(name) + "=" + encodeURIComponent(value) + "; path=" + path + "; ";
-    if (typeof expiresInMs === "number") {
-      cookie += "expires=" + (new Date(1*new Date() + expiresInMs)).toGMTString() + "; ";
-    }
-    // TODO(sompylasar): Add "auto" domain.
+    var cdomain = "", cpath = "", expires = "", secure = "";
+
     if (domain === "auto") {
-      domain = void 0;
+      var parts = document[STR_location].hostname[STR_split](".");
+      var domain = (
+        parts[STR_length] >= 2
+          ? parts[parts[STR_length]-2] + "." + parts[parts[STR_length]-1]
+          : null
+      )
+      cdomain = (domain ? "; domain=." + domain : "");
     }
-    if (domain && "none" != domain) {
-      cookie += "domain=" + domain + ";";
+
+    if (path) {
+      cpath = "; path=" + path;
     }
-    document[STR_cookie] = cookie;
+
+    if (expiresInMs) {
+        expires = "; expires=" + (new Date(1*new Date() + expiresInMs)).toGMTString();
+    }
+
+    if (document[STR_location].protocol === "https:") {
+        secure = "; secure";
+    }
+
+    document[STR_cookie] = name + "=" + encodeURIComponent(value) + expires + cpath + cdomain + secure;
+    
+    // TODO(sompylasar): GA limits the cookie value length with 1200 bytes.
     // TODO(sompylasar): GA checks if the cookie value has been actually written.
   }
   
-  /**
-   * Some hashing algorithm from GA analytics.js source.
-   */
-  function _calcHash(a) {
-    var b = 1, c = 0, d;
-    if (a) {
-      for (b = 0, d = a[STR_length] - 1; 0 <= d; d--) {
-        c = a.charCodeAt(d),
-        b = (b << 6 & 268435455) + c + (c << 14),
-        c = b & 266338304,
-        b = 0 != c ? b ^ c >> 21 : b;
-      }
-    }
-    return b;
+  function _removeCookie(name, path, domain) {
+    _writeCookie(name, "", path, domain, -24*60*60*1000);
   }
   
   /**
-   * Some footprinting algorithm from GA analytics.js source.
+   * UUID from mixpanel.js
+   * @see https://github.com/mixpanel/mixpanel-js/blob/master/mixpanel.js#L806
    */
-  function _calcFootprint() {
-    for (
-      var a =  +
-        (document[STR_cookie] ? document[STR_cookie] : "") +
-        (document.referrer ? document.referrer : ""),
-      b = a[STR_length],
-      c = window.history[STR_length];
-      0 < c;
-    ) {
-      a += c-- ^ b++;
-    }
-    return _calcHash(a);
-  }
+  var _UUID = (function() {
+      // Time/ticks information
+      // 1*new Date() is a cross browser version of Date.now()
+      var T = function() {
+          var d = 1*new Date()
+          , i = 0;
+
+          // this while loop figures how many browser ticks go by
+          // before 1*new Date() returns a new number, ie the amount
+          // of ticks that go by per millisecond
+          while (d == 1*new Date()) { i++; }
+
+          return d.toString(16) + i.toString(16);
+      };
+
+      // Math.Random entropy
+      var R = function() {
+          return Math.random().toString(16).replace('.','');
+      };
+
+      // User agent entropy
+      // This function takes the user agent string, and then xors
+      // together each sequence of 8 bytes.  This produces a final
+      // sequence of 8 bytes which it returns as hex.
+      var UA = function(n) {
+          var ua = navigator.userAgent, i, ch, buffer = [], ret = 0;
+
+          function xor(result, byte_array) {
+              var j, tmp = 0;
+              for (j = 0; j < byte_array.length; j++) {
+                  tmp |= (buffer[j] << j*8);
+              }
+              return result ^ tmp;
+          }
+
+          for (i = 0; i < ua.length; i++) {
+              ch = ua.charCodeAt(i);
+              buffer.unshift(ch & 0xFF);
+              if (buffer.length >= 4) {
+                  ret = xor(ret, buffer);
+                  buffer = [];
+              }
+          }
+
+          if (buffer.length > 0) { ret = xor(ret, buffer); }
+
+          return ret.toString(16);
+      };
+
+      return function() {
+          var se = (screen.height*screen.width).toString(16);
+          return (T()+"-"+R()+"-"+UA()+"-"+se+"-"+T());
+      };
+  })();
   
   
   var C5T_COOKIE_VERSION = '1';
   
-  function _serializeCookie(tracker) {
+  function _serializeTracker(tracker) {
     var clientId = tracker[STR_get](STR_clientId);
     if (!clientId) {
       return;
@@ -395,7 +454,7 @@
     );
   }
   
-  function _deserializeCookie(tracker) {
+  function _deserializeTracker(tracker) {
     var cookieValue = _readCookie(tracker[STR_get](STR_cookieName));
     var pairs = (cookieValue && cookieValue[STR_split]('&')) || [];
     var versionMatched = false;
@@ -414,17 +473,15 @@
       tracker[STR_set](STR_clientId, clientId);
     }
     else {
-      tracker[STR_set](STR_clientId, _calcFootprint());
+      tracker[STR_set](STR_clientId, _UUID());
     }
   }
   
-  function _removeCookie(tracker) {
-    _writeCookie(
+  function _forgetTracker(tracker) {
+    _removeCookie(
       tracker[STR_get](STR_cookieName),
-      "deleted",
       tracker[STR_get](STR_cookiePath),
-      tracker[STR_get](STR_cookieDomain),
-      -1E10
+      tracker[STR_get](STR_cookieDomain)
     );
   }
   
@@ -438,14 +495,14 @@
     // Fill in the defaults.
     trackerState[STR_cookieName] = "_c5t";
     trackerState[STR_cookiePath] = "/";
-    trackerState[STR_cookieExpires] = 63072E3;
+    trackerState[STR_cookieExpires] = 2*365*24*60*60*1000;
     
     // Make the tracking of c5t-specific events enabled by default.
     trackerState[STR_trackEnterExit] = true;
     trackerState[STR_trackForegroundBackground] = true;
     
-    _deserializeCookie(this);
-    _serializeCookie(this);
+    _deserializeTracker(this);
+    _serializeTracker(this);
   }
   
   var TrackerProto = Tracker[STR_prototype];
@@ -484,7 +541,7 @@
    * @param {string} [args_1] Either `fieldValue` for the `fieldName` or nothing.
    */
   TrackerProto[STR_set] = function (args_0, args_1) {
-    _removeCookie(this);
+    _forgetTracker(this);
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME];
     if (_isString(args_0)) {
       trackerState[args_0] = args_1;
@@ -492,7 +549,7 @@
     else {
       _extend(trackerState, args_0);
     }
-    _serializeCookie(this);
+    _serializeTracker(this);
   };
   
   /**
