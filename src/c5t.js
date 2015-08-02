@@ -525,11 +525,16 @@
     );
   }
   
+  /**
+   * Ensures the same Client ID for all trackers.
+   * Could be optional some day.
+   */
+  var commonClientId;
   
   /**
    * The tracker constructor.
    */
-  function Tracker() {
+  function Tracker(configObject) {
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME] = {};
     
     // Fill in the defaults.
@@ -541,14 +546,15 @@
     trackerState[STR_trackEnterExit] = true;
     trackerState[STR_trackForegroundBackground] = true;
     
+    // Set the initial state.
+    _extend(trackerState, configObject);
+    
     // Read from an existing cookie.
     _deserializeTracker(this);
     
-    // Generate new Client ID if the cookie is missing (first-time visit).
-    if (!trackerState[STR_clientId]) {
-      trackerState[STR_clientId] = _UUID();
-      _serializeTracker(this);
-    }
+    // Generate new Client ID if the first-initialized tracker cookie is missing (first-time visit).
+    trackerState[STR_clientId] = commonClientId = (commonClientId || _UUID());
+    _serializeTracker(this);
   }
   
   var TrackerProto = Tracker[STR_prototype];
@@ -631,9 +637,17 @@
     }
     _extend(configObject, args_0);
     var trackerName = (configObject[STR_name] || DEFAULT_TRACKER_NAME);
-    var tracker = (_trackersByName[trackerName] || new Tracker());
-    configObject[STR_cookieName] = (configObject[STR_cookieName] || (DEFAULT_COOKIE_NAME + trackerName));
-    tracker[STR_set](configObject);
+    var tracker = _trackersByName[trackerName];
+    configObject[STR_cookieName] = (
+      (tracker ? tracker[STR_get](STR_cookieName) : configObject[STR_cookieName])
+      || (DEFAULT_COOKIE_NAME + trackerName)
+    );
+    if (!tracker) {
+      tracker = new Tracker(configObject);
+    }
+    else {
+      tracker[STR_set](configObject);
+    }
     if (!_trackersByName[trackerName]) {
       _trackersByName[trackerName] = tracker;
       _trackersArray[STR_push](tracker);
