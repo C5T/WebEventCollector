@@ -63,16 +63,37 @@
   /**
    * The internal name of the default `tracker` object.
    * Not intended for using by the user's code.
-   * 
+   *
    * @const {string}
    */
   var DEFAULT_TRACKER_NAME = "";
   
   /**
+   * The default name of the tracker cookies.
+   *
+   * @const {string}
+   */
+  var DEFAULT_COOKIE_NAME = "_c5t";
+  
+  /**
+   * The default path of the tracker cookies.
+   *
+   * @const {string}
+   */
+  var DEFAULT_COOKIE_PATH = "/";
+  
+  /**
+   * The default expires of the tracker cookies, in milliseconds.
+   *
+   * @const {number}
+   */
+  var DEFAULT_COOKIE_EXPIRES = 2*365*24*60*60*1000;
+  
+  /**
    * The internal name of the property on the `tracker` objects 
    * that contain the tracker state.
    * Not intended for reading from the user's code.
-   * 
+   *
    * @const {string}
    */
   var TRACKER_STATE_PROPERTY_NAME = "s";
@@ -90,7 +111,7 @@
    * The name of the property on the `c5t` global object 
    * that contains the timestamp of when the snippet has executed.
    * WARNING: Do not change for backwards compatibility with the snippet.
-   * 
+   *
    * @const {string}
    */
   var C5T_TIME_PROPERTY_NAME = "l";
@@ -99,7 +120,7 @@
   * The name of the property on the `c5t` global object 
   * that contains the timestamp of when the snippet has executed.
   * WARNING: Do not change for backwards compatibility with the snippet.
-  * 
+  *
   * @const {string}
   */
   var C5T_VERSION_PROPERTY_NAME = "v";
@@ -246,7 +267,7 @@
       image = null;
       callbackFn();
     };
-    image.src = baseUrl + '?' + payloadString;
+    image.src = baseUrl + "?" + payloadString;
   };
   
   // If the `sendBeacon` API is not supported we don't add the transport implementation.
@@ -282,13 +303,13 @@
     var payload = _extend(_extend({}, trackerState), fieldObject);
     payload[STR_timestamp] = (1*new Date());
     payload[STR_hitType] = hitType;
-    var payloadString = '';
+    var payloadString = "";
     // Only serialize whitelisted properties.
     for (var x in SERIALIZABLE_PROPERTIES) {
       if (_hasOwnProperty[STR_call](SERIALIZABLE_PROPERTIES, x) && _hasOwnProperty[STR_call](payload, x)) {
         payloadString += (
-          (payloadString ? '&' : '') +
-          encodeURIComponent(SERIALIZABLE_PROPERTIES[x]) + '=' +
+          (payloadString ? "&" : "") +
+          encodeURIComponent(SERIALIZABLE_PROPERTIES[x]) + "=" +
           encodeURIComponent(_serializeValue(payload[x]))
         );
       }
@@ -319,14 +340,14 @@
    */
   function _readCookie(name) {
     var nameEQ = name + "=";
-    var ca = document[STR_cookie][STR_split](';');
+    var ca = document[STR_cookie][STR_split](";");
     for(var i = 0, ic = ca[STR_length]; i < ic; i++) {
       var c = ca[i];
-      while (c.charAt(0) == ' ') {
-        c = c[STR_substring](1,c[STR_length]);
+      while (c.charAt(0) == " ") {
+        c = c[STR_substring](1, c[STR_length]);
       }
       if (c[STR_indexOf](nameEQ) == 0) {
-        return decodeURIComponent(c[STR_substring](nameEQ[STR_length],c[STR_length]));
+        return decodeURIComponent(c[STR_substring](nameEQ[STR_length], c[STR_length]));
       }
     }
     return null;
@@ -432,8 +453,18 @@
   })();
   
   
+  /**
+   * The cookie version.
+   * If the version differs from the current one, the cookie will be invalidated.
+   */
   var C5T_COOKIE_VERSION = '1';
   
+  /**
+   * Serializes a tracker into a cookie.
+   * The cookie parameters are taken from the tracker.
+   *
+   * @param {Tracker} tracker
+   */
   function _serializeTracker(tracker) {
     var clientId = tracker[STR_get](STR_clientId);
     if (!clientId) {
@@ -454,13 +485,19 @@
     );
   }
   
+  /**
+   * Deserializes a tracker from a cookie.
+   * The cookie name is taken from the tracker.
+   *
+   * @param {Tracker} tracker
+   */
   function _deserializeTracker(tracker) {
     var cookieValue = _readCookie(tracker[STR_get](STR_cookieName));
-    var pairs = (cookieValue && cookieValue[STR_split]('&')) || [];
+    var pairs = (cookieValue && cookieValue[STR_split]("&")) || [];
     var versionMatched = false;
     var clientId;
     for (var ic = pairs.length, i = 0; i < ic; ++i) {
-      var pair = pairs[i][STR_split]('=');
+      var pair = pairs[i][STR_split]("=");
       pair[1] = decodeURIComponent(pair[1]);
       if (pair[0] === 'v' && C5T_COOKIE_VERSION === pair[1]) {
         versionMatched = true;
@@ -472,11 +509,14 @@
     if (versionMatched && clientId) {
       tracker[STR_set](STR_clientId, clientId);
     }
-    else {
-      tracker[STR_set](STR_clientId, _UUID());
-    }
   }
   
+  /**
+   * Removes the tracker cookie.
+   * The cookie parameters are taken from the tracker.
+   *
+   * @param {Tracker} tracker
+   */
   function _forgetTracker(tracker) {
     _removeCookie(
       tracker[STR_get](STR_cookieName),
@@ -493,16 +533,22 @@
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME] = {};
     
     // Fill in the defaults.
-    trackerState[STR_cookieName] = "_c5t";
-    trackerState[STR_cookiePath] = "/";
-    trackerState[STR_cookieExpires] = 2*365*24*60*60*1000;
+    trackerState[STR_cookieName] = DEFAULT_COOKIE_NAME;
+    trackerState[STR_cookiePath] = DEFAULT_COOKIE_PATH;
+    trackerState[STR_cookieExpires] = DEFAULT_COOKIE_EXPIRES;
     
     // Make the tracking of c5t-specific events enabled by default.
     trackerState[STR_trackEnterExit] = true;
     trackerState[STR_trackForegroundBackground] = true;
     
+    // Read from an existing cookie.
     _deserializeTracker(this);
-    _serializeTracker(this);
+    
+    // Generate new Client ID if the cookie is missing (first-time visit).
+    if (!trackerState[STR_clientId]) {
+      trackerState[STR_clientId] = _UUID();
+      _serializeTracker(this);
+    }
   }
   
   var TrackerProto = Tracker[STR_prototype];
@@ -541,6 +587,7 @@
    * @param {string} [args_1] Either `fieldValue` for the `fieldName` or nothing.
    */
   TrackerProto[STR_set] = function (args_0, args_1) {
+    // Remove the old cookie.
     _forgetTracker(this);
     var trackerState = this[TRACKER_STATE_PROPERTY_NAME];
     if (_isString(args_0)) {
@@ -549,6 +596,7 @@
     else {
       _extend(trackerState, args_0);
     }
+    // Set the new cookie.
     _serializeTracker(this);
   };
   
@@ -584,6 +632,7 @@
     _extend(configObject, args_0);
     var trackerName = (configObject[STR_name] || DEFAULT_TRACKER_NAME);
     var tracker = (_trackersByName[trackerName] || new Tracker());
+    configObject[STR_cookieName] = (configObject[STR_cookieName] || (DEFAULT_COOKIE_NAME + trackerName));
     tracker[STR_set](configObject);
     if (!_trackersByName[trackerName]) {
       _trackersByName[trackerName] = tracker;
