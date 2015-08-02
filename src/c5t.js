@@ -580,7 +580,7 @@
     if (!callbackFn || !callbackFn[STR_apply]) {
       callbackFn = _noop;
     }
-    _DEBUG_log(c5t_name, STR_send, payloadString);
+    _DEBUG_log('"' + (trackerState[STR_name] || DEFAULT_TRACKER_NAME) + '"', STR_send, payloadString);
     transportFn(baseUrl, payloadString, callbackFn);
   };
   
@@ -667,7 +667,13 @@
     if (fnName === STR_create) {
       return _create[STR_apply](null, args);
     }
-    var tracker = _trackersByName[DEFAULT_TRACKER_NAME];
+    var index = fnName.indexOf(".");
+    var trackerName = DEFAULT_TRACKER_NAME;
+    if (index > 0) {
+      trackerName = fnName.substring(0, index);
+      fnName = fnName.substring(index + 1);
+    }
+    var tracker = _trackersByName[trackerName];
     if (tracker) {
       var fn = tracker[fnName];
       if (fn && fn[STR_apply]) {

@@ -10,16 +10,18 @@ o=ur.getElementsByTagName(re)[0];i.async=1;i.src=nt;o.parentNode.insertBefore(i,
 
 c5t('create', 'TEST_ACCOUNT_ID');
 
+c5t('create', 'TEST_ACCOUNT_ID_2', {
+  'name': 'tracker2',
+  'trackEnterExit': false,
+  'trackForegroundBackground': false
+});
+
 setTimeout(function () {
-  c5t('send', 'event', {
+  c5t('tracker2.send', 'event', {
     'eventCategory': 'Test Category',
     'eventAction': 'Test Action'
   });
 }, 3000);
-
-c5t('create', 'TEST_ACCOUNT_ID_2', {
-  'name': 'tracker2'
-});
 </script>
 </head>
 <body>
