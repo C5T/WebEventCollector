@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "",
   "scripts": {
-    "build": "rm -r ./build && mkdir -p ./build; ./node_modules/.bin/uglifyjs ./src/c5t.js -o ./build/c5t.js -m -c",
+    "build": "rm -rf ./build && mkdir -p ./build; ./node_modules/.bin/uglifyjs ./src/c5t.js -o ./build/c5t.js -m -c",
     "start-dev": "NODE_ENV=development node ./test/server.js",
     "start": "npm run build && NODE_ENV=production node ./test/server.js"
   },
