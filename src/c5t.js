@@ -57,8 +57,7 @@
   var C5T_EVENT_ACTION_FOREGROUND = 'Fg';
   var C5T_EVENT_ACTION_BACKGROUND = 'Bg';
   
-  // TODO(sompylasar): Update the API endpoint URL when the backend is ready.
-  var C5T_DATADROP_URL = '//localhost:4000/datadrop/v1/';
+  var C5T_DATADROP_URL = 'https://secure.c5t.io/datadrop/v1/';
   
   /**
    * The internal name of the default `tracker` object.
